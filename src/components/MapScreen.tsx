@@ -69,13 +69,8 @@ export default function MapScreen() {
         style={styles.bottomGradient}
       />
 
-      <TouchableOpacity onPress={() => {}}>
-        <LinearGradient
-            colors={['#0065F8', '#4300FF']}
-            style={styles.tagButton}
-        >
-            <Text style={styles.tagButtonText}>Tag</Text>
-        </LinearGradient>
+      <TouchableOpacity style={styles.tagButton} onPress={() => {}}>
+        <Text style={styles.tagButtonText}>Tag</Text>
       </TouchableOpacity>
     </View>
   );
@@ -89,6 +84,7 @@ const styles = StyleSheet.create({
     bottom: 40,
     alignSelf: 'center',
     borderRadius: 999,
+    backgroundColor: '#4300FF',
     elevation: 4,
   },
   tagButtonText: {
