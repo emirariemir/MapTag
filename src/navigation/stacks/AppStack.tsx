@@ -10,7 +10,7 @@ export type AppStackParamList = {
 const Stack = createNativeStackNavigator<AppStackParamList>();
 
 export const AppStack = () => (
-  <Stack.Navigator>
+  <Stack.Navigator screenOptions={{ headerShown: false }}>
     <Stack.Screen name="Map" component={MapScreen} options={{ title: 'Map' }} />
   </Stack.Navigator>
 );
