@@ -18,7 +18,7 @@ export default function RootNavigator() {
 
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator>
         {user ? (
           <Stack.Screen name="App" component={AppStack} />
         ) : (
