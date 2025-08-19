@@ -1,15 +1,17 @@
-import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, PermissionsAndroid, Platform, TouchableOpacity, Text, Alert } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, StyleSheet, PermissionsAndroid, Platform, TouchableOpacity, Text, Alert, ActivityIndicator } from 'react-native';
 import MapView, { Marker, LatLng, Region } from 'react-native-maps';
 import Geolocation from '@react-native-community/geolocation';
 import LinearGradient from 'react-native-linear-gradient';
 import auth from '@react-native-firebase/auth';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import saveTag from '../helpers/saveTag';
 
 export default function MapScreen() {
   const [markers, setMarkers] = useState<LatLng[]>([]);
   const [userLocation, setUserLocation] = useState<LatLng | null>(null);
   const [signingOut, setSigningOut] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const insets = useSafeAreaInsets();
 
@@ -41,7 +43,7 @@ export default function MapScreen() {
   }, []);
 
   const handleLongPress = (event: any) => {
-    const coordinate = event.nativeEvent.coordinate;
+    const coordinate = event.nativeEvent.coordinate as LatLng;
     setMarkers((prev) => [...prev, coordinate]);
   };
 
@@ -56,6 +58,36 @@ export default function MapScreen() {
       setSigningOut(false);
     }
   };
+
+  const onTagPress = useCallback(async () => {
+    const currentUser = auth().currentUser;
+    if (!currentUser) {
+      Alert.alert('Not signed in', 'Please sign in to save a tag.');
+      return;
+    }
+    if (!userLocation) {
+      Alert.alert('No location', 'We could not get your current location yet.');
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      setMarkers((prev) => [...prev, userLocation]);
+
+      await saveTag({
+        uid: currentUser.uid,
+        lat: userLocation.latitude,
+        lng: userLocation.longitude,
+        title: null,
+        visibility: 'private',
+      });
+    } catch (e: any) {
+      Alert.alert('Failed to save tag', e?.message ?? 'Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }, [userLocation]);
 
   const initialRegion: Region | undefined = userLocation
     ? { ...userLocation, latitudeDelta: 0.05, longitudeDelta: 0.05 }
@@ -79,22 +111,23 @@ export default function MapScreen() {
 
       <LinearGradient colors={['transparent', '#B6F500']} style={styles.bottomGradient} />
 
-      <TouchableOpacity style={styles.tagButton} onPress={() => {}}>
-        <Text style={styles.tagButtonText}>Tag</Text>
+      <TouchableOpacity style={[styles.tagButton, saving && styles.tagButtonDisabled]} onPress={onTagPress} disabled={saving}>
+        {saving ? <ActivityIndicator /> : <Text style={styles.tagButtonText}>Tag</Text>}
       </TouchableOpacity>
 
-      <TouchableOpacity style={[styles.signOutButton, {marginTop: insets.top}]} onPress={onSignOut} disabled={signingOut}>
+      <TouchableOpacity style={[styles.signOutButton, { marginTop: insets.top }]} onPress={onSignOut} disabled={signingOut}>
         <Text style={styles.signOutText}>{signingOut ? 'Signing out…' : 'Sign out'}</Text>
       </TouchableOpacity>
     </View>
   );
 }
 
+
 const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { flex: 1 },
 
-  // Existing Tag button
+  // Tag button
   tagButton: {
     position: 'absolute',
     bottom: 40,
@@ -102,13 +135,16 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: '#4300FF',
     elevation: 4,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  tagButtonDisabled: {
+    opacity: 0.7,
   },
   tagButtonText: {
     color: 'white',
     fontWeight: 'bold',
     fontSize: 16,
-    marginHorizontal: 40,
-    marginVertical: 12,
   },
 
   // Bottom gradient
@@ -127,12 +163,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 999,
-    // shadow iOS
     shadowColor: '#000',
     shadowOpacity: 0.2,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 3 },
-    // elevation Android
     elevation: 3,
   },
   signOutText: {
