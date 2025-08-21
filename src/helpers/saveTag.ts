@@ -13,9 +13,9 @@ export default async function saveTag(params: {
   const { uid, lat, lng, title = null, visibility = 'private' } = params;
 
   const geohash = geofire.geohashForLocation([lat, lng]);
-  const ref = firestore().collection('tags').doc();
+  const ref = firestore().collection('tags');
 
-  await ref.set({
+  await ref.add({
     ownerId: uid,
     location: new firestore.GeoPoint(lat, lng),
     geohash,

@@ -3,9 +3,11 @@ import { View, StyleSheet, PermissionsAndroid, Platform, TouchableOpacity, Text,
 import MapView, { Marker, LatLng, Region } from 'react-native-maps';
 import Geolocation from '@react-native-community/geolocation';
 import LinearGradient from 'react-native-linear-gradient';
-import auth from '@react-native-firebase/auth';
+import auth, { firebase } from '@react-native-firebase/auth';
+import firestore from '@react-native-firebase/firestore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import saveTag from '../helpers/saveTag';
+import { useAuthStore, useAuthUser } from '../state/authStore';
 
 export default function MapScreen() {
   const [markers, setMarkers] = useState<LatLng[]>([]);
@@ -14,6 +16,40 @@ export default function MapScreen() {
   const [saving, setSaving] = useState(false);
 
   const insets = useSafeAreaInsets();
+
+  const [loadingTags, setLoadingTags] = useState(false);
+
+  const { user, initializing } = useAuthUser();
+
+  const fetchTagsOnce = useCallback(async () => {
+    if (!user) return;
+
+    setLoadingTags(true);
+
+    try {
+      const tagsSnapshot = await firestore()
+        .collection('tags')
+        .get();
+
+      const fetchedMarkers: LatLng[] = [];
+      tagsSnapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.location) {
+          fetchedMarkers.push({
+            latitude: data.location.latitude,
+            longitude: data.location.longitude,
+          });
+        }
+      });
+
+      setMarkers(fetchedMarkers);
+    } catch (e: any) {
+      console.warn(e);
+      Alert.alert('Failed to fetch tags', e?.message ?? 'Please try again.');
+    } finally {
+      setLoadingTags(false);
+    }
+  }, []);
 
   useEffect(() => {
     const requestLocationPermission = async () => {
@@ -31,6 +67,8 @@ export default function MapScreen() {
             longitude: position.coords.longitude,
           };
           setUserLocation(coords);
+
+          fetchTagsOnce();
         },
         (error) => {
           console.warn(error.message);
@@ -42,10 +80,33 @@ export default function MapScreen() {
     requestLocationPermission();
   }, []);
 
-  const handleLongPress = (event: any) => {
+  const handleLongPress = useCallback(async (event: any) => {
+    if (initializing) return;
+    if (!user?.uid) {
+      Alert.alert('Not signed in', 'Please sign in to save a tag.');
+      return;
+    }
+
     const coordinate = event.nativeEvent.coordinate as LatLng;
-    setMarkers((prev) => [...prev, coordinate]);
-  };
+
+    try {
+      setSaving(true);
+
+      // setMarkers((prev) => [...prev, coordinate]);
+
+      await saveTag({
+        uid: user.uid,
+        lat: coordinate.latitude,
+        lng: coordinate.longitude,
+        title: null,
+        visibility: 'private',
+      });
+    } catch (e: any) {
+      Alert.alert('Failed to save tag', e?.message ?? 'Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  }, []);
 
   const onSignOut = async () => {
     try {
@@ -60,8 +121,7 @@ export default function MapScreen() {
   };
 
   const onTagPress = useCallback(async () => {
-    const currentUser = auth().currentUser;
-    if (!currentUser) {
+    if (!user) {
       Alert.alert('Not signed in', 'Please sign in to save a tag.');
       return;
     }
@@ -76,7 +136,7 @@ export default function MapScreen() {
       setMarkers((prev) => [...prev, userLocation]);
 
       await saveTag({
-        uid: currentUser.uid,
+        uid: user.uid,
         lat: userLocation.latitude,
         lng: userLocation.longitude,
         title: null,
@@ -105,15 +165,20 @@ export default function MapScreen() {
           {markers.map((marker, index) => (
             <Marker key={index} coordinate={marker} />
           ))}
-          {userLocation && <Marker coordinate={userLocation} pinColor="blue" />}
         </MapView>
       )}
 
       <LinearGradient colors={['transparent', '#B6F500']} style={styles.bottomGradient} />
 
-      <TouchableOpacity style={[styles.tagButton, saving && styles.tagButtonDisabled]} onPress={onTagPress} disabled={saving}>
-        {saving ? <ActivityIndicator /> : <Text style={styles.tagButtonText}>Tag</Text>}
-      </TouchableOpacity>
+      <View style={styles.bottomActions}>
+        <TouchableOpacity style={[styles.roundButton, loadingTags && styles.disabled]} onPress={fetchTagsOnce} disabled={loadingTags}>
+          {(loadingTags) ? <ActivityIndicator /> : <Text style={styles.tagButtonText}>Refresh</Text>}
+        </TouchableOpacity>
+
+        <TouchableOpacity style={[styles.roundButton, saving && styles.disabled]} onPress={onTagPress} disabled={saving}>
+          {(saving) ? <ActivityIndicator /> : <Text style={styles.tagButtonText}>Tag</Text>}
+        </TouchableOpacity>
+      </View>
 
       <TouchableOpacity style={[styles.signOutButton, { marginTop: insets.top }]} onPress={onSignOut} disabled={signingOut}>
         <Text style={styles.signOutText}>{signingOut ? 'Signing out…' : 'Sign out'}</Text>
@@ -137,6 +202,30 @@ const styles = StyleSheet.create({
     elevation: 4,
     paddingHorizontal: 24,
     paddingVertical: 12,
+  },
+  bottomActions: {
+    position: 'absolute',
+    bottom: 40,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  roundButton: {
+    borderRadius: 999,
+    backgroundColor: '#4300FF',
+    elevation: 4,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    minWidth: 110,
+    alignItems: 'center',
+  },
+  disabled: { opacity: 0.7 },
+  roundButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
   tagButtonDisabled: {
     opacity: 0.7,
