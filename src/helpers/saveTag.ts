@@ -1,7 +1,7 @@
 import firestore, { FirebaseFirestoreTypes } from '@react-native-firebase/firestore';
 import * as geofire from 'geofire-common';
 
-type Visibility = 'public' | 'private';
+export type Visibility = 'public' | 'private';
 
 export default async function saveTag(params: {
   uid: string;
